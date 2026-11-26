@@ -1,0 +1,10 @@
+<div class="grid gap-4">
+  <h2>Guarde seu código de recuperação</h2>
+  <p class="text-sm text-suave">Salve este código em um gerenciador de senhas ou em outro local seguro. Ele permite redefinir sua senha e será exibido somente agora.</p>
+  <label>Código de recuperação
+    <textarea class="font-mono break-all" readonly rows="3" [value]="codigo()" spellcheck="false"></textarea>
+  </label>
+  <p class="text-sm text-suave">O código pode ser usado uma única vez. Gerar outro código invalida o anterior. Se perder a senha e o código, você perderá o acesso à conta.</p>
+  <label class="check"><input #confirmacao type="checkbox" (change)="salvo.set(confirmacao.checked)">Guardei meu código em um local seguro</label>
+  <button type="button" class="primario" [disabled]="!salvo()" (click)="concluir.emit()">Continuar</button>
+</div>

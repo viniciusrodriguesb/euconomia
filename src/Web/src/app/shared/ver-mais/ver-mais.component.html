@@ -1,0 +1,7 @@
+@if (total() > limite) {
+  <button type="button" class="link" [attr.aria-expanded]="expandido()"
+    [attr.aria-label]="(expandido() ? 'Ver menos' : 'Ver mais') + ' · ' + rotulo()"
+    (click)="alternar.emit()">
+    {{ expandido() ? 'Ver menos' : 'Ver mais (' + (total() - limite) + ')' }}
+  </button>
+}

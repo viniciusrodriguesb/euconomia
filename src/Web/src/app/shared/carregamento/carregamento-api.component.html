@@ -1,0 +1,11 @@
+<div role="status" aria-atomic="true" class="estado">
+  @if (carregamento.visivel()) {
+    <div class="indicador">
+      <picture>
+        <source media="(prefers-reduced-motion: reduce)" srcset="/imagens/growth-estatico.png">
+        <img src="/imagens/growth-88.webp" alt="" width="44" height="44">
+      </picture>
+      <span>Carregando dados…</span>
+    </div>
+  }
+</div>

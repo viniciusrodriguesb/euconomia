@@ -1,0 +1,98 @@
+<header class="cabecalho">
+  <div><h1>Recorrências</h1><p>Planeje custos fixos, entradas, assinaturas e aportes. Ajuste um mês ou crie uma nova versão da regra.</p></div>
+  <button type="button" class="primario" (click)="criando.set(!criando())">{{ criando() ? 'Fechar nova regra' : 'Nova regra' }}</button>
+</header>
+@if (erro()) { <p role="alert" class="mensagem erro">{{ erro() }}</p> }
+@if (aviso()) { <p role="status" class="mensagem">{{ aviso() }}</p> }
+<div class="grid gap-4">
+  @if (criando()) {
+    <section class="painel">
+      <h2>Nova regra recorrente</h2>
+      @if (dados().contas.length === 0) { <p><a routerLink="/cadastros">Cadastre uma conta</a> antes de criar uma regra.</p> }
+      <form [formGroup]="regra" (ngSubmit)="registrar()">
+        <div class="grid items-start gap-4 grid-cols-[repeat(auto-fit,minmax(min(100%,300px),1fr))]">
+          <label>Descrição <input formControlName="descricao" maxlength="240" required></label>
+          <label>Tipo <select formControlName="tipo" (change)="trocarTipo()">@for (item of tipos; track item[0]) { <option [value]="item[0]">{{ item[1] }}</option> }</select></label>
+          <label>Valor padrão (R$) <input formControlName="valorBase" inputmode="decimal" required></label>
+          <label>Dia do mês <input formControlName="diaDoMes" type="number" min="1" max="31" required></label>
+          <label>A partir de <input formControlName="competenciaInicio" type="month" required></label>
+          <label>Até <input formControlName="competenciaFim" type="month"><small>Em branco, a regra continua sem data final.</small></label>
+          @if (assinatura()) {
+            <label>Cartão <select formControlName="cartaoId"><option value="">Selecione um cartão</option>
+              @for (item of cartoes(); track item.id) { <option [value]="item.id">{{ item.nome }}</option> }
+            </select></label>
+          } @else {
+            <label>Forma de pagamento <select formControlName="formaPagamento">
+              @for (item of pagamentos; track item[0]) { <option [value]="item[0]">{{ item[1] }}</option> }
+            </select></label>
+            <label>Conta <select formControlName="contaId"><option value="">Selecione uma conta</option>
+              @for (item of contas(); track item.id) { <option [value]="item.id">{{ item.nome }}</option> }
+            </select></label>
+          }
+          <label>Categoria <select formControlName="categoriaId" required><option value="">Selecione</option>
+            @for (item of categorias(); track item.id) { <option [value]="item.id">{{ item.nome }}</option> }
+          </select></label>
+        </div>
+        <div><button class="primario" [disabled]="regra.invalid || ocupado()">Salvar regra</button></div>
+      </form>
+    </section>
+  }
+  <section class="painel">
+    <label class="check"><input #auto type="checkbox" [checked]="confirmacaoAutomatica()" [disabled]="ocupado()" (change)="alternarAutomatico(auto.checked)">
+      Confirmar ocorrências na virada do mês</label>
+    <p class="suave nota">Com a opção ativa, as ocorrências do mês anterior passam ao extrato automaticamente.</p>
+    <div class="cabecalho compacto">
+      <div><h2>Previsão de recorrências</h2><p>Itens realizados já constam no extrato.</p></div>
+      <form class="filtros" [formGroup]="filtros" (ngSubmit)="buscar()">
+        <label>A partir de <input type="month" formControlName="inicio"></label>
+        <label>Horizonte <select formControlName="meses">
+          @for (n of [6, 12, 24, 60]; track n) { <option [ngValue]="n">{{ n }} meses</option> }
+        </select></label>
+        <button class="secundario" [disabled]="filtros.invalid || ocupado()">Aplicar filtros</button>
+      </form>
+    </div>
+    @if (selecionada(); as item) {
+      <form class="ajuste" [formGroup]="ajuste" (ngSubmit)="salvarAjuste(item)">
+        <h3>Ajustar {{ item.descricao }} em {{ item.competencia | mesBr }}</h3>
+        <div class="filtros">
+          <label>Novo valor (R$) <input formControlName="valor" inputmode="decimal" required></label>
+          <label>Aplicar <select formControlName="modo"><option value="mes">Somente este mês</option><option value="adiante">Deste mês em diante</option></select></label>
+          <button class="primario" [disabled]="ajuste.invalid || ocupado()">Aplicar ajuste</button>
+          <button type="button" class="secundario" (click)="selecionada.set(null)">Cancelar</button>
+          <button type="button" class="perigo" [disabled]="ocupado()" (click)="encerrar(item)">Encerrar a partir deste mês</button>
+        </div>
+      </form>
+    }
+    <div class="tabela">
+      <table class="responsivo">
+        <thead><tr><th scope="col">Regra</th><th scope="col">Competência</th><th scope="col">Valor</th><th scope="col">Estado</th><th scope="col">Ações</th></tr></thead>
+        <tbody>
+          @for (item of ocorrencias()?.itens ?? []; track item.regraId + item.competencia) {
+            <tr>
+              <td><strong>{{ item.descricao }}</strong><small>{{ item.tipo | rotulo }} · {{ item.data | diaBr }}</small></td>
+              <td data-label="Competência">{{ item.competencia | mesBr }}</td>
+              <td data-label="Valor" class="moeda">{{ item.valor | brl }}</td>
+              <td><span class="etiqueta" [class.sucesso]="item.realizada">{{ item.realizada ? 'Realizado' : item.ignorada ? 'Pulado' : 'Previsto' }}</span>
+                @if (item.ajustada) { <span class="etiqueta ajustado">Ajustado</span> }
+              </td>
+              <td>
+                @if (!item.realizada) {
+                  <div class="flex flex-wrap items-end gap-2">
+                    <button type="button" class="link" (click)="editar(item)" [disabled]="ocupado()">Ajustar</button>
+                    @if (!item.ignorada) { <button type="button" class="link" (click)="excecao(item, true)" [disabled]="ocupado()">Pular mês</button> }
+                    @if (item.ajustada) { <button type="button" class="link" (click)="excecao(item, false)" [disabled]="ocupado()">Voltar ao valor padrão</button> }
+                    @if (!item.ignorada && item.data <= hojeIso) {
+                      <button type="button" class="secundario" (click)="confirmar(item)" [disabled]="ocupado()">Confirmar ocorrência</button>
+                    }
+                  </div>
+                }
+              </td>
+            </tr>
+          } @empty { <tr><td colspan="5" class="suave">{{ ocupado() ? 'Carregando…' : 'Nenhuma recorrência no período.' }}</td></tr> }
+        </tbody>
+      </table>
+    </div>
+    <app-paginacao [pagina]="ocorrencias()" [tamanhos]="[10, 20, 30]" [tamanhoInicial]="10" rotulo="ocorrências"
+      [ocupado]="ocupado()" (paginaAlterada)="paginar($event)" (tamanhoAlterado)="paginar(1, $event)" />
+  </section>
+</div>

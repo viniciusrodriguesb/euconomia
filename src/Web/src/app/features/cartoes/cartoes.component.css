@@ -1,0 +1,13 @@
+@reference "../../../styles.css";
+
+.compacto { @apply mb-2; }
+    .legenda { @apply flex flex-wrap text-suave; font-size: .83rem; gap: 10px 18px; }
+    .legenda li { @apply flex items-center; gap: 6px; }
+    .amostra { width: 10px; height: 10px; border-radius: 3px; }
+    .barras { @apply mb-4; }
+    .barra-parcelas { @apply grid items-center gap-2; grid-template-columns: 5.2rem minmax(20px, 1fr) 8rem; font-size: .85rem; }
+    .barra-parcelas strong { @apply text-right; }
+    .trilho { @apply flex overflow-hidden; background: #edf2fa; border-radius: 6px; height: 14px; }
+    .trilho > div { @apply h-full; }
+    .pagamento { @apply rounded-[10px]; background: #eff5ff; padding: 14px; }
+    @media (max-width: 450px) { .barra-parcelas { grid-template-columns: 4.5rem minmax(10px, 1fr) auto; } }

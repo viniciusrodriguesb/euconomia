@@ -1,0 +1,107 @@
+<header class="cabecalho"><div><h1>Lançamentos</h1><p>Registre movimentações e confira o efeito no saldo e nas faturas.</p></div></header>
+@if (erro()) { <p role="alert" class="mensagem erro">{{ erro() }}</p> }
+@if (aviso()) { <p role="status" class="mensagem">{{ aviso() }}</p> }
+<div class="grid gap-4">
+  <section class="painel" id="formulario">
+    <h2>{{ corrigindo() ? 'Corrigir lançamento' : 'Novo lançamento' }}</h2>
+    @if (corrigindo(); as original) {
+      <p class="suave">Será registrado um estorno de {{ original.descricao }} ({{ original.valor | brl }}) e gravado o lançamento substituto.</p>
+    }
+    @if (dados().contas.length === 0) { <p><a routerLink="/cadastros">Cadastre uma conta</a> para lançar.</p> }
+    <form [formGroup]="form" (ngSubmit)="prever()">
+      <fieldset [disabled]="ocupado()" class="campos grid items-start gap-4 grid-cols-[repeat(auto-fit,minmax(min(100%,300px),1fr))]">
+        <label>Tipo <select formControlName="tipo">@for (item of tiposLancamento; track item[0]) { <option [value]="item[0]">{{ item[1] }}</option> }</select></label>
+        <label>Forma de pagamento <select formControlName="formaPagamento">@for (item of pagamentos; track item[0]) { <option [value]="item[0]">{{ item[1] }}</option> }</select></label>
+        <label>Valor (R$) <input inputmode="decimal" formControlName="valor" placeholder="0,00" required></label>
+        <label>Descrição <input formControlName="descricao" maxlength="240" required></label>
+        <label>{{ credito() ? 'Data da compra' : 'Data de caixa' }} <input type="date" formControlName="dataLancamento" required></label>
+        <label>Competência <input type="month" formControlName="competencia"><small>Em branco, usa o mês da data informada.</small></label>
+        @if (credito()) {
+          <label>Cartão <select formControlName="cartaoId"><option value="">Selecione um cartão</option>
+            @for (item of dados().cartoes; track item.id) { @if (!item.inativadoEm) { <option [value]="item.id">{{ item.nome }}</option> } }
+          </select></label>
+          <label>Quantidade de parcelas <input type="number" min="1" max="120" formControlName="parcelas"></label>
+        } @else {
+          <label>Conta <select formControlName="contaId"><option value="">Selecione uma conta</option>
+            @for (item of dados().contas; track item.id) { @if (!item.inativadoEm) { <option [value]="item.id">{{ item.nome }}</option> } }
+          </select></label>
+        }
+        @if (tipo() !== 'RetiradaSaldo') {
+          <label>Categoria <select formControlName="categoriaId"><option value="">Selecione uma categoria</option>
+            @for (item of dados().categorias; track item.id) { @if (!item.inativadoEm) { <option [value]="item.id">{{ item.nome }}</option> } }
+          </select></label>
+        }
+        <label>Estabelecimento <select formControlName="estabelecimentoId"><option value="">Sem estabelecimento</option>
+          @for (item of dados().estabelecimentos; track item.id) { <option [value]="item.id">{{ item.nome }}</option> }
+        </select></label>
+      </fieldset>
+      <div class="flex flex-wrap items-end gap-2">
+        <button class="secundario" [disabled]="form.invalid || ocupado()">Conferir efeito</button>
+        @if (corrigindo()) { <button class="link" type="button" (click)="cancelarCorrecao()">Cancelar correção</button> }
+      </div>
+    </form>
+    @if (efeito(); as resumo) {
+      <section class="efeito" aria-label="Resumo de efeito" aria-live="polite">
+        <h3>Antes de confirmar</h3>
+        <p>Impacto no saldo pela nova movimentação <strong>{{ resumo.impactoNoSaldo | brl }}</strong> · Competência <strong>{{ resumo.competencia | mesBr }}</strong></p>
+        @if (resumo.faturas.length) {
+          <p>A conta será debitada no pagamento das faturas. As parcelas aparecem no fluxo de caixa projetado.</p>
+          <ul class="lista">
+            @for (p of resumo.faturas; track p.numero) {
+              <li>{{ p.numero }}/{{ resumo.faturas.length }} · {{ p.valor | brl }} · Fatura de {{ p.competencia | mesBr }} · Fecha em {{ p.fechamento | diaBr }} · Vence em {{ p.vencimento | diaBr }}</li>
+            }
+          </ul>
+        } @else { <p>Movimentação efetivada na data de caixa escolhida.</p> }
+        <button type="button" class="primario" [disabled]="ocupado()" (click)="salvar()">{{ corrigindo() ? 'Confirmar estorno e substituição' : 'Confirmar lançamento' }}</button>
+      </section>
+    }
+  </section>
+  <section class="painel">
+    <div class="cabecalho compacto"><div><h2>Extrato</h2><p>Movimentações realizadas e estornos vinculados.</p></div>
+      <div class="filtros">
+        <label>Competência <input #filtro type="month" [value]="mesFiltro()" [disabled]="ocupado()" (change)="filtrar(filtro.value)"></label>
+        @if (mesFiltro()) { <button type="button" class="secundario" [disabled]="ocupado()" (click)="filtrar('')">Todos os meses</button> }
+      </div>
+    </div>
+    @if (detalhe(); as original) {
+      <section class="efeito" aria-label="Lançamento original">
+        <h3>{{ original.descricao }}</h3>
+        <p>{{ original.tipo | rotulo }} · {{ original.formaPagamento | rotulo }} · {{ original.valor | brl }}</p>
+        <p>Data {{ original.dataLancamento | diaBr }} · Competência {{ original.competencia | mesBr }}</p>
+        <button type="button" class="link" (click)="detalhe.set(null)">Fechar lançamento original</button>
+      </section>
+    }
+    <div class="tabela">
+      <table class="responsivo">
+        <thead><tr><th scope="col">Movimentação</th><th scope="col">Data</th><th scope="col">Competência</th><th scope="col">Valor</th><th scope="col">Ações</th></tr></thead>
+        <tbody>
+          @for (item of extrato()?.itens ?? []; track item.id) {
+            <tr [attr.id]="'lancamento-' + item.id">
+              <td><strong>{{ item.descricao }}</strong>
+                <small><span [class.verde]="item.tipo === 'ResgateInvestimento'">
+                  @if (item.tipo === 'ResgateInvestimento') { <span aria-hidden="true">↶</span> }
+                  @if (item.tipo === 'RetiradaSaldo') { <span aria-hidden="true">↗</span> }
+                  {{ item.tipo | rotulo }}</span> · {{ item.formaPagamento | rotulo }}
+                  @if (item.numeroParcela) { · {{ item.numeroParcela }}/{{ item.totalParcelas }} }
+                  @if (item.lancamentoEstornadoId) { · <button type="button" class="link" (click)="abrirOriginal(item.lancamentoEstornadoId)">estorna #{{ item.lancamentoEstornadoId }}</button> }
+                </small>
+              </td>
+              <td data-label="Data">{{ item.dataLancamento | diaBr }}</td><td data-label="Competência">{{ item.competencia | mesBr }}</td>
+              <td data-label="Valor" class="moeda">{{ item.valor | brl }}</td>
+              <td>
+                @if (!estornados().has(item.id) && item.tipo !== 'Estorno') {
+                  <div class="flex flex-wrap items-end gap-2">
+                    @if (item.tipo !== 'PagamentoFatura') { <button type="button" class="link" (click)="corrigir(item)">Corrigir</button> }
+                    <button type="button" class="link" [disabled]="ocupado()" (click)="estornar(item)">Estornar</button>
+                  </div>
+                }
+              </td>
+            </tr>
+          } @empty { <tr><td colspan="5" class="suave">{{ ocupado() ? 'Carregando…' : 'Nenhum lançamento neste período.' }}</td></tr> }
+        </tbody>
+      </table>
+    </div>
+    <app-paginacao [pagina]="extrato()" [tamanhos]="[10, 20]" [tamanhoInicial]="20" rotulo="lançamentos"
+      [ocupado]="ocupado()" (paginaAlterada)="paginar($event)" (tamanhoAlterado)="paginar(1, $event)" />
+  </section>
+</div>

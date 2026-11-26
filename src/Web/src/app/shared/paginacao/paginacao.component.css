@@ -1,0 +1,6 @@
+@reference "../../../styles.css";
+
+.paginacao { @apply flex items-center flex-wrap; gap: 12px 18px; margin-top: 14px; }
+    label { @apply flex items-center gap-2; }
+    select { @apply w-auto; min-height: 36px; }
+    span { @apply text-suave; font-size: .85rem; }

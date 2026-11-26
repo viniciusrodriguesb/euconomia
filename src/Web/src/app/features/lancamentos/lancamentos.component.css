@@ -1,0 +1,6 @@
+@reference "../../../styles.css";
+
+.campos { @apply border-0 m-0 p-0; }
+    .compacto { margin-bottom: 10px; }
+    .efeito { @apply grid gap-2.5 p-4 mt-4 rounded-[10px] justify-items-start; background: #eff5ff; }
+    td button.link { @apply text-left; overflow-wrap: anywhere; }

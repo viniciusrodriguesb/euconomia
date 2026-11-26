@@ -1,0 +1,9 @@
+@reference "../../../styles.css";
+
+:host { @apply block; }
+    canvas { @apply block w-full; height: 230px; margin: 2px 0 10px; }
+    .evolucao-legenda { @apply flex flex-wrap text-suave; gap: 14px; margin-top: 13px; font-size: .78rem; }
+    li { @apply flex items-center; gap: 6px; }
+    li i { @apply inline-block; width: 10px; height: 10px; border-radius: 3px; }
+    .entrada { background: #3264d3; } .saida { background: #6e9fe0; } .saldo { background: #157858; }
+    .ajuste { @apply rounded-full bg-white; border: 2px solid #a76015; }

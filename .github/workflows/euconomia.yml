@@ -1,0 +1,147 @@
+name: Euconomia - CI e deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: euconomia-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:16.15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: euconomia_ci_descartavel
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+    env:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Financeiro: Host=127.0.0.1;Port=5432;Database=postgres;Username=postgres;Password=euconomia_ci_descartavel
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22.23.5
+          cache: npm
+          cache-dependency-path: src/Web/package-lock.json
+      - name: Validar frontend e cobertura mínima
+        working-directory: src/Web
+        run: |
+          npm ci
+          npm run typecheck
+          npm run lint
+          npm run test:unit
+          npm run build
+      - name: Testar backend e migrations
+        run: dotnet test Euconomia.slnx --configuration Release
+      - name: Preparar banco e aplicação do teste no navegador
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          ConnectionStrings__Financeiro: Host=127.0.0.1;Port=5432;Database=e2e_euconomia;Username=postgres;Password=euconomia_ci_descartavel
+        run: |
+          docker exec "$POSTGRES_CONTAINER" createdb -U postgres e2e_euconomia
+          dotnet tool restore
+          dotnet ef database update --project src/Infraestrutura
+          dotnet publish src/Api --configuration Release --output .publicacao/ci
+      - name: Testar navegador e acessibilidade
+        working-directory: src/Web
+        env:
+          ConnectionStrings__Financeiro: Host=127.0.0.1;Port=5432;Database=e2e_euconomia;Username=postgres;Password=euconomia_ci_descartavel
+          EUCONOMIA_E2E_DLL: ${{ github.workspace }}/.publicacao/ci/Api.dll
+          EUCONOMIA_URL: http://127.0.0.1:5278
+          ASPNETCORE_URLS: http://127.0.0.1:5278
+        run: |
+          npx playwright install --with-deps chromium
+          npm test
+
+  imagem:
+    needs: validar
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      referencia: ${{ steps.referencia.outputs.imagem }}@${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Nome da imagem
+        id: referencia
+        run: printf 'imagem=ghcr.io/%s\n' "${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Autenticar no GitHub Container Registry
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compilar imagem e publicar na main
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.referencia.outputs.imagem }}:sha-${{ github.sha }}
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  implantar:
+    needs: imagem
+    if: github.ref == 'refs/heads/main' && vars.VPS_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: producao
+    concurrency:
+      group: euconomia-producao
+      cancel-in-progress: false
+    env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ vars.VPS_PORT || '22' }}
+      SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+      SSH_KNOWN_HOSTS: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
+      IMAGE_REF: ${{ needs.imagem.outputs.referencia }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Configurar SSH e enviar release
+        run: |
+          set -Eeuo pipefail
+          [[ "$VPS_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]
+          [[ "$VPS_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$VPS_PORT" =~ ^[0-9]+$ ]]
+          [[ -n "$SSH_PRIVATE_KEY" && -n "$SSH_KNOWN_HOSTS" ]]
+          ssh_dir="$(mktemp -d)"
+          trap 'rm -rf -- "$ssh_dir"' EXIT
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$ssh_dir/key"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
+          chmod 600 "$ssh_dir/key" "$ssh_dir/known_hosts"
+          ssh_opts=(-i "$ssh_dir/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$ssh_dir/known_hosts")
+          destino="$VPS_USER@$VPS_HOST"
+          release="/opt/euconomia/releases/$GITHUB_SHA"
+          ssh "${ssh_opts[@]}" -p "$VPS_PORT" "$destino" "mkdir -p '$release'"
+          scp "${ssh_opts[@]}" -P "$VPS_PORT" infra/producao/*.sh infra/producao/compose.yml infra/producao/Caddyfile infra/producao/.env.example "$destino:$release/"
+          ssh "${ssh_opts[@]}" -p "$VPS_PORT" "$destino" "bash '$release/deploy.sh' '$IMAGE_REF'"

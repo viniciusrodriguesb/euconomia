@@ -1,0 +1,6 @@
+@reference "../../../styles.css";
+
+.estado { @apply fixed pointer-events-none; z-index: 5; inset-inline-end: max(16px, env(safe-area-inset-right)); inset-block-end: var(--margem-carregamento, max(16px, env(safe-area-inset-bottom))); }
+    .indicador { @apply flex items-center text-texto bg-white border border-linha; gap: 9px; padding: 5px 14px 5px 6px; border-radius: 14px; box-shadow: 0 8px 28px #13264224; font-size: .85rem; font-weight: 650; }
+    picture, img { @apply block; }
+    img { @apply rounded-lg; }

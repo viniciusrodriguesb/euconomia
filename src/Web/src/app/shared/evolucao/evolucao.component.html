@@ -1,0 +1,15 @@
+<ul class="evolucao-legenda lista">
+  <li><i class="entrada"></i>Entradas</li><li><i class="saida"></i>Saídas</li><li><i class="saldo"></i>{{ projecao ? 'Saldo projetado' : 'Saldo em caixa' }}</li>
+  @if (projecao && temAjuste()) { <li><i class="ajuste"></i>Mês ajustado</li> }
+</ul>
+<canvas #grafico aria-hidden="true"></canvas>
+@if (!projecao) { <details>
+  <summary>Ver valores mês a mês</summary>
+  <table class="responsivo"><thead><tr><th scope="col">Mês</th><th scope="col">Entradas</th><th scope="col">Saídas</th><th scope="col">Saldo em caixa</th></tr></thead>
+    <tbody>@for (linha of linhasVisiveis; track linha.mes) {
+      <tr><td>{{ linha.mes | mesBr }}</td><td data-label="Entradas">{{ linha.entradas | brl }}</td>
+        <td data-label="Saídas">{{ linha.saidas | brl }}</td><td data-label="Saldo">{{ linha.saldo | brl }}</td></tr>
+    }</tbody>
+  </table>
+  <app-ver-mais [total]="dados.length" rotulo="evolução mensal" [expandido]="expandido" (alternar)="expandido = !expandido" />
+</details> }

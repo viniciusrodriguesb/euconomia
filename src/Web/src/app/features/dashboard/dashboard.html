@@ -1,0 +1,191 @@
+<header class="cabecalho">
+  <div><h1>Visão geral</h1><p>Acompanhe seu dinheiro por competência ou pela data em que ele movimentou a conta.</p></div>
+  <a class="primario" routerLink="/lancamentos">+ Novo lançamento</a>
+</header>
+@if (erro()) { <p class="mensagem erro" role="alert">{{ erro() }}</p> }
+@if (aviso()) { <p class="mensagem" role="status">{{ aviso() }}</p> }
+<div class="grid gap-4">
+  <section class="painel painel-filtros" aria-label="Filtros do dashboard">
+    <form class="filtros" [formGroup]="filtros" (ngSubmit)="buscar()">
+      <label>Período <select formControlName="meses"><option [ngValue]="1">Mensal</option><option [ngValue]="6">Semestral</option><option [ngValue]="12">Anual</option></select></label>
+      <label>Mês inicial <input formControlName="inicio" type="month" required></label>
+      <label>Visão <select formControlName="visao"><option value="Competencia">Competência</option><option value="Caixa">Caixa</option></select></label>
+      <label>Projeção <select formControlName="horizonte">
+        @for (n of [6, 12, 24, 60]; track n) { <option [ngValue]="n">{{ n }} meses</option> }
+      </select></label>
+      <button class="secundario" [disabled]="filtros.invalid || ocupado()">Aplicar filtros</button>
+    </form>
+  </section>
+  @if (painel(); as p) {
+    @if (p.alertas.length || p.avisoPercentuais) {
+      <section class="painel alertas" aria-labelledby="alertas">
+        <div class="cabecalho compacto"><h2 id="alertas">Alertas</h2><button type="button" class="link" (click)="configurar()">Configurar limites</button></div>
+        @if (p.avisoPercentuais) { <p class="suave">{{ p.avisoPercentuais }}</p> }
+        <ul class="lista">
+          @for (a of itensVisiveis('alertas', p.alertas); track a.tipo + a.competencia + a.referencia) {
+            <li><span class="ponto" [class.urgente]="a.gravidade === 'Vermelho'" aria-hidden="true"></span>
+              <span>{{ a.mensagem }} <small>· {{ a.competencia | mesBr }}</small></span>
+              @if (a.id && !a.lidoEm) { <button type="button" class="link" (click)="marcarLido(a.id)" [disabled]="ocupado()">Marcar como lido</button> }
+              @if (a.lidoEm) { <small>Lido</small> }
+            </li>
+          }
+        </ul>
+        <app-ver-mais [total]="p.alertas.length" rotulo="alertas" [expandido]="expandido('alertas')" (alternar)="alternarLista('alertas')" />
+      </section>
+    }
+    @if (configurando()) {
+      <section class="painel">
+        <h2>Limites dos alertas</h2>
+        <form [formGroup]="conf" (ngSubmit)="salvarConfiguracao()">
+          <div class="grid items-start gap-4 grid-cols-[repeat(auto-fit,minmax(min(100%,300px),1fr))]">
+            <label>Gasto alto · amarelo (%) <input formControlName="amarelo" inputmode="decimal" required></label>
+            <label>Gasto alto · vermelho (%) <input formControlName="vermelho" inputmode="decimal" required></label>
+            <label>Custos fixos (%) <input formControlName="fixos" inputmode="decimal" required></label>
+            <label>Comprometimento futuro (%) <input formControlName="comprometimento" inputmode="decimal" required></label>
+            <label>Uso do cartão (%) <input formControlName="cartao" inputmode="decimal" required></label>
+            <label>Transações por estabelecimento <input formControlName="estabelecimento" type="number" min="1" required></label>
+            <label>Despesa atípica · múltiplo da média <input formControlName="atipica" inputmode="decimal" required></label>
+          </div>
+          <fieldset>
+            <legend>Alertas ativos</legend>
+            <div class="grid items-start gap-4 grid-cols-[repeat(auto-fit,minmax(min(100%,300px),1fr))]">
+              @for (nome of tiposAlerta; track nome; let i = $index) {
+                <label class="check"><input type="checkbox" [checked]="alertaAtivo(i)" (change)="alternarAlerta(i)"> {{ nome }}</label>
+              }
+            </div>
+          </fieldset>
+          <div class="flex flex-wrap items-end gap-2"><button class="primario" [disabled]="conf.invalid || ocupado()">Salvar limites</button><button type="button" class="secundario" (click)="configurando.set(false)">Cancelar</button></div>
+        </form>
+      </section>
+    }
+    <section class="saldos" aria-label="Resumo financeiro">
+      <article class="saldo-principal">
+        <span>Saldo atual em caixa</span>
+        <strong>{{ p.saldoAtual | brl }}</strong>
+        <p>Projetado para o fim deste mês <b>{{ p.saldoProjetadoFimMes | brl }}</b></p>
+      </article>
+      <article class="painel indicador"><span>Entradas no período</span><strong class="verde">{{ agregado().entradas | brl }}</strong>
+        <small>Resgates de investimento {{ agregado().resgates | brl }}</small></article>
+      <article class="painel indicador"><span>Saídas no período</span><strong>{{ agregado().saidas | brl }}</strong>
+        <small>Retiradas de saldo {{ agregado().retiradas | brl }}</small></article>
+      <article class="painel indicador"><span>Patrimônio investido</span><strong>{{ p.patrimonioInvestido | brl }}</strong><small>Aportes menos resgates</small></article>
+    </section>
+    <section class="painel" aria-label="Percentuais sobre entradas">
+      <div class="percentuais">
+        <div><span>Custos fixos</span><strong>{{ percentual(agregado().fixos) }}</strong></div>
+      <div><span>Cartão de crédito</span><strong>{{ percentual(agregado().cartao) }}</strong></div>
+      <div><span>Aportes</span><strong>{{ percentual(agregado().aportes) }}</strong></div>
+        @if (expandido('percentuais')) {
+          <div><span>Taxa de poupança</span><strong>{{ percentual(agregado().livre + agregado().aportes) }}</strong></div>
+          <div><span>Livre após saídas</span><strong>{{ percentual(agregado().livre) }}</strong></div>
+        }
+      </div>
+      <app-ver-mais [total]="5" rotulo="percentuais sobre entradas" [expandido]="expandido('percentuais')" (alternar)="alternarLista('percentuais')" />
+    </section>
+    <div class="graficos">
+      <section class="painel"><h2>Evolução mensal</h2><app-evolucao [dados]="p.evolucao" /></section>
+      <section class="painel"><h2>Composição das saídas</h2>
+        <div class="composicao">
+          <div class="rosca" [style.background]="composicao().fundo" aria-hidden="true"></div>
+          <ul class="lista legenda">
+            @for (item of itensVisiveis('composicao', composicao().itens); track item.nome) {
+              <li><span class="amostra" [style.background]="item.cor" aria-hidden="true"></span><span>{{ item.nome }}</span><strong>{{ item.valor | brl }}</strong></li>
+            }
+          </ul>
+          <app-ver-mais [total]="composicao().itens.length" rotulo="composição das saídas" [expandido]="expandido('composicao')" (alternar)="alternarLista('composicao')" />
+        </div>
+      </section>
+    </div>
+    <section class="painel">
+      <div class="cabecalho compacto"><div><h2>Fluxo de caixa projetado</h2><p>Saldo atual, recorrências a confirmar e faturas a pagar.</p></div><a class="link" routerLink="/cartoes">Ver cartões e parcelas</a></div>
+      <app-evolucao [dados]="fluxo()" [projecao]="true" />
+      <details open>
+        <summary>{{ p.projecao.length }} meses de projeção</summary>
+        <table class="responsivo">
+          <thead><tr><th scope="col">Mês</th><th scope="col">Entradas</th><th scope="col">Fixos</th><th scope="col">Faturas e parcelas</th><th scope="col">Aportes</th><th scope="col">Saldo no fim do mês</th></tr></thead>
+          <tbody>
+            @for (linha of itensVisiveis('projecao', p.projecao); track linha.mes) {
+              <tr><td>{{ linha.mes | mesBr }} @if (linha.ajustado) { <span class="etiqueta ajustado">Ajustado</span> }</td>
+                <td data-label="Entradas">{{ linha.entradas | brl }}</td><td data-label="Fixos">{{ linha.fixos | brl }}</td>
+                <td data-label="Faturas">{{ linha.parcelasEFaturas | brl }}</td><td data-label="Aportes">{{ linha.aportes | brl }}</td>
+                <td class="moeda" [class.vermelho]="saldoNegativo(linha.saldoAoFim)" data-label="Saldo projetado">{{ linha.saldoAoFim | brl }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+        <app-ver-mais [total]="p.projecao.length" rotulo="fluxo de caixa projetado" [expandido]="expandido('projecao')" (alternar)="alternarLista('projecao')" />
+      </details>
+    </section>
+    <div class="grid items-start gap-4 min-[811px]:grid-cols-2">
+      <section class="painel">
+        <h2>Top categorias</h2>
+        <ul class="lista">@for (item of itensVisiveis('categorias', p.categorias); track item.nome) {
+          <li class="linha-lista"><div><strong>{{ item.nome }}</strong><br><small>{{ item.transacoes }} transações</small></div><strong class="moeda">{{ item.valor | brl }}</strong></li>
+        } @empty { <li class="suave">Nenhuma despesa por categoria no período.</li> }</ul>
+        <app-ver-mais [total]="p.categorias.length" rotulo="categorias" [expandido]="expandido('categorias')" (alternar)="alternarLista('categorias')" />
+      </section>
+      <section class="painel">
+        <h2>Top estabelecimentos</h2>
+        <ul class="lista">@for (item of itensVisiveis('estabelecimentos', p.estabelecimentos); track item.nome) {
+          <li class="linha-lista"><div><strong>{{ item.nome }}</strong><br><small>{{ item.transacoes }} transações</small></div><strong class="moeda">{{ item.valor | brl }}</strong></li>
+        } @empty { <li class="suave">Nenhuma despesa vinculada a estabelecimento no período.</li> }</ul>
+        <app-ver-mais [total]="p.estabelecimentos.length" rotulo="estabelecimentos" [expandido]="expandido('estabelecimentos')" (alternar)="alternarLista('estabelecimentos')" />
+      </section>
+      <section class="painel">
+        <h2>Próximos vencimentos</h2>
+        <ul class="lista">@for (item of itensVisiveis('vencimentos', calendario()); track item.chave) {
+          <li class="linha-lista"><div><strong>{{ item.descricao }}</strong><br><small>{{ item.data | diaBr }}</small></div><strong class="moeda">{{ item.valor | brl }}</strong></li>
+        } @empty { <li class="suave">Nenhum vencimento nas previsões exibidas.</li> }</ul>
+        <app-ver-mais [total]="calendario().length" rotulo="próximos vencimentos" [expandido]="expandido('vencimentos')" (alternar)="alternarLista('vencimentos')" />
+      </section>
+      <section class="painel">
+        <h2>Comparativo mensal</h2>
+        <table class="responsivo">
+          <thead><tr><th scope="col">Referência</th><th scope="col">Entradas</th><th scope="col">Saídas</th></tr></thead>
+          <tbody>
+            <tr><td>{{ p.periodo[0].mes | mesBr }}</td><td data-label="Entradas">{{ p.periodo[0].entradas | brl }}</td><td data-label="Saídas">{{ saidasDoMes(p.periodo[0]) | brl }}</td></tr>
+            <tr><td>{{ p.mesAnterior.mes | mesBr }}</td><td data-label="Entradas">{{ p.mesAnterior.entradas | brl }}</td><td data-label="Saídas">{{ saidasDoMes(p.mesAnterior) | brl }}</td></tr>
+            <tr><td>Média de 6 meses anteriores</td><td data-label="Entradas">{{ p.mediaEntradas6Meses | brl }}</td><td data-label="Saídas">{{ p.mediaSaidas6Meses | brl }}</td></tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="painel">
+        <h2>Patrimônio por mês</h2>
+        <ul class="lista">@for (item of itensVisiveis('patrimonio', p.patrimonioPorMes); track item.mes) {
+          <li class="linha-lista"><span>{{ item.mes | mesBr }}</span><strong class="moeda">{{ item.valor | brl }}</strong></li>
+        }</ul>
+        <app-ver-mais [total]="p.patrimonioPorMes.length" rotulo="patrimônio por mês" [expandido]="expandido('patrimonio')" (alternar)="alternarLista('patrimonio')" />
+      </section>
+    </div>
+    <section class="painel">
+      <h2>Previsto × realizado</h2>
+      <table class="responsivo">
+        <thead><tr><th scope="col">Recorrência</th><th scope="col">Competência</th><th scope="col">Previsto</th><th scope="col">Realizado</th><th scope="col">Variação</th></tr></thead>
+        <tbody>
+          @for (item of itensVisiveis('previstos', previstos()); track item.regraId + item.competencia) {
+            <tr><td>{{ item.descricao }} @if (item.ajustada) { <span class="etiqueta ajustado">Ajustado</span> }</td>
+              <td data-label="Competência">{{ item.competencia | mesBr }}</td><td data-label="Previsto">{{ item.valor | brl }}</td>
+              <td data-label="Realizado">{{ item.realizado | brl }}</td><td data-label="Variação">{{ item.variacao | brl }}</td>
+            </tr>
+          } @empty { <tr><td colspan="5" class="suave">Nenhuma recorrência no período.</td></tr> }
+        </tbody>
+      </table>
+      <app-ver-mais [total]="previstos().length" rotulo="previsto × realizado" [expandido]="expandido('previstos')" (alternar)="alternarLista('previstos')" />
+    </section>
+    <section class="painel">
+      <div class="cabecalho compacto"><div><h2>Conferência</h2><p>Compare os saldos, os totais das faturas e as parcelas com o histórico.</p></div>
+        <div class="flex flex-wrap items-end gap-2">
+          <button type="button" class="secundario" (click)="configurar()" [disabled]="ocupado()">Limites de alertas</button>
+          <button type="button" class="secundario" (click)="conferir()" [disabled]="ocupado()">Conferir registros</button>
+        </div>
+      </div>
+      @if (conferencia(); as c) {
+        <p role="status">{{ c.contas }} contas, {{ c.faturas }} faturas e {{ c.compras }} compras conferidas · {{ c.divergencias.length }} divergências.</p>
+        <ul class="lista">@for (item of itensVisiveis('divergencias', c.divergencias); track item) { <li>{{ item }}</li> }</ul>
+        <app-ver-mais [total]="c.divergencias.length" rotulo="divergências" [expandido]="expandido('divergencias')" (alternar)="alternarLista('divergencias')" />
+      }
+    </section>
+  } @else if (ocupado()) {
+    <p role="status" class="painel suave">Carregando visão geral…</p>
+  }
+</div>

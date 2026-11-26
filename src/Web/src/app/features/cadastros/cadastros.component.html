@@ -1,0 +1,110 @@
+<header class="cabecalho"><div><h1>Cadastros</h1><p>Gerencie as contas, os cartões e a classificação dos seus lançamentos.</p></div></header>
+@if (erro()) { <p role="alert" class="mensagem erro">{{ erro() }}</p> }
+@if (aviso()) { <p role="status" class="mensagem">{{ aviso() }}</p> }
+<div class="grid items-start gap-4 min-[811px]:grid-cols-2">
+  <section class="painel">
+    <h2>Contas</h2>
+    <form [formGroup]="conta" (ngSubmit)="salvarConta()">
+      <label>Nome da conta <input formControlName="nome" maxlength="160" required></label>
+      <div class="grid items-start gap-4 min-[811px]:grid-cols-2">
+        <label>Saldo inicial (R$) <input formControlName="saldoInicial" inputmode="decimal" required></label>
+        <label>Data do saldo inicial <input type="date" formControlName="dataSaldoInicial" required></label>
+      </div>
+      <div><button class="primario" [disabled]="conta.invalid || ocupado()">Adicionar conta</button></div>
+    </form>
+    <ul class="lista">
+      @for (item of dados().contas; track item.id) {
+        <li class="linha-lista">
+          <div><strong>{{ item.nome }}</strong><br><small>Saldo inicial {{ item.saldoInicial | brl }} em {{ item.dataSaldoInicial | diaBr }}</small></div>
+          @if (item.inativadoEm) { <span class="etiqueta">Inativa</span> }
+          @else { <button type="button" class="secundario" [disabled]="ocupado()" (click)="inativar('contas', item.id, item.nome)">Inativar</button> }
+        </li>
+      } @empty { <li class="suave">Adicione uma conta para registrar o primeiro lançamento.</li> }
+    </ul>
+  </section>
+  <section class="painel">
+    <h2>{{ cartaoId() ? 'Editar cartão' : 'Cartões' }}</h2>
+    <form [formGroup]="cartao" (ngSubmit)="salvarCartao()">
+      <div class="grid items-start gap-4 min-[811px]:grid-cols-2">
+        <label>Nome do cartão <input formControlName="nome" maxlength="160" required></label>
+        <label>Bandeira <input formControlName="bandeira" maxlength="160" required></label>
+      </div>
+      <label>Conta de pagamento <select formControlName="contaPagamentoId" required>
+        <option value="">Selecione uma conta</option>
+        @for (item of contas(); track item.id) { <option [value]="item.id">{{ item.nome }}</option> }
+      </select></label>
+      <div class="grid items-start gap-4 min-[811px]:grid-cols-2">
+        <label>Limite (R$) <input formControlName="limite" inputmode="decimal" required></label>
+        <label>Dia de fechamento <input formControlName="diaFechamento" type="number" min="1" max="31" required></label>
+      </div>
+      <label>Dia de vencimento <input formControlName="diaVencimento" type="number" min="1" max="31" required></label>
+      @if (cartaoId()) { <label class="check"><input type="checkbox" formControlName="inativo"> Marcar como inativo</label> }
+      <div class="flex flex-wrap items-end gap-2">
+        <button class="primario" [disabled]="cartao.invalid || ocupado()">{{ cartaoId() ? 'Salvar cartão' : 'Adicionar cartão' }}</button>
+        @if (cartaoId()) { <button type="button" class="secundario" (click)="limparCartao()">Cancelar</button> }
+      </div>
+    </form>
+    <ul class="lista">
+      @for (item of dados().cartoes; track item.id) {
+        <li class="linha-lista">
+          <div><strong>{{ item.nome }}</strong><br><small>{{ item.bandeira }} · {{ item.limite | brl }} @if (item.inativadoEm) { · Inativo }</small></div>
+          <button type="button" class="secundario" (click)="editarCartao(item)">Editar</button>
+        </li>
+      }
+    </ul>
+  </section>
+  <section class="painel">
+    <h2>Categorias</h2>
+    <form [formGroup]="categoria" (ngSubmit)="salvarCategoria()">
+      <label>Nome da categoria <input formControlName="nome" maxlength="160" required></label>
+      <div><button class="primario" [disabled]="categoria.invalid || ocupado()">Adicionar categoria</button></div>
+    </form>
+    <ul class="lista">
+      @for (item of dados().categorias; track item.id) {
+        <li class="linha-lista"><span>{{ item.nome }}</span>
+          @if (item.inativadoEm) { <span class="etiqueta">Inativa</span> }
+          @else { <button type="button" class="secundario" [disabled]="ocupado()" (click)="inativar('categorias', item.id, item.nome)">Inativar</button> }
+        </li>
+      }
+    </ul>
+  </section>
+  <section class="painel">
+    <h2>Estabelecimentos</h2>
+    <form [formGroup]="loja" (ngSubmit)="salvarLoja()">
+      <label>Nome do estabelecimento <input formControlName="nome" maxlength="160" required></label>
+      <label>Alerta a partir de quantas transações no mês? <input formControlName="limiteTransacoes" type="number" min="1" placeholder="Usar padrão da conta"></label>
+      <div><button class="primario" [disabled]="loja.invalid || ocupado()">Adicionar estabelecimento</button></div>
+    </form>
+    <ul class="lista">
+      @for (item of dados().estabelecimentos; track item.id) {
+        <li class="linha-lista"><strong>{{ item.nome }}</strong><small>{{ item.limiteTransacoes ?? 'Padrão' }}</small></li>
+      }
+    </ul>
+    @if (dados().estabelecimentos.length) {
+      <details>
+        <summary>Organizar nomes e limites</summary>
+        <form [formGroup]="gerenciarLoja" (ngSubmit)="salvarOrganizacao()">
+          <label>Operação <select formControlName="acao" (change)="acaoLoja.set(gerenciarLoja.controls.acao.value)">
+            <option value="alias">Adicionar outro nome (alias)</option><option value="limite">Alterar limite de transações</option>
+            <option value="mesclar">Mesclar cadastros</option>
+          </select></label>
+          <label>{{ acaoLoja() === 'mesclar' ? 'Origem' : 'Estabelecimento principal' }}
+            <select formControlName="id" required><option value="">Selecione</option>
+              @for (item of dados().estabelecimentos; track item.id) { <option [value]="item.id">{{ item.nome }}</option> }
+            </select>
+          </label>
+          @if (acaoLoja() === 'alias') {
+            <label>Nome alternativo <input formControlName="nome" maxlength="160"></label>
+          } @else if (acaoLoja() === 'mesclar') {
+            <label>Estabelecimento que fica como principal <select formControlName="destinoId"><option value="">Selecione</option>
+              @for (item of dados().estabelecimentos; track item.id) { <option [value]="item.id">{{ item.nome }}</option> }
+            </select></label>
+          } @else {
+            <label>Novo limite de transações <input formControlName="limiteTransacoes" type="number" min="1" placeholder="Em branco, usa o padrão"></label>
+          }
+          <div><button class="secundario" [disabled]="gerenciarLoja.invalid || ocupado()">Salvar organização</button></div>
+        </form>
+      </details>
+    }
+  </section>
+</div>

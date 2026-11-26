@@ -1,0 +1,104 @@
+<header class="cabecalho">
+  <div><h1>Cartões e parcelas</h1><p>Confira as faturas e o valor das compras parceladas que ainda falta pagar.</p></div>
+  <a class="secundario" routerLink="/cadastros">Gerenciar cartões</a>
+</header>
+@if (erro()) { <p role="alert" class="mensagem erro">{{ erro() }}</p> }
+@if (aviso()) { <p role="status" class="mensagem">{{ aviso() }}</p> }
+<div class="grid gap-4">
+  <section class="painel">
+    <div class="cabecalho compacto">
+      <div><h2>Parcelas a pagar por mês</h2><p>Valores agrupados por mês da fatura e cartão.</p></div>
+      <form [formGroup]="filtro" (ngSubmit)="buscar()" class="filtros">
+        <label>A partir de <input type="month" formControlName="inicio" required></label>
+        <label>Período <select formControlName="meses">
+          @for (n of [6, 12, 24]; track n) { <option [ngValue]="n">{{ n }} meses</option> }
+        </select></label>
+        <button class="secundario" [disabled]="filtro.invalid || ocupado()">Aplicar filtros</button>
+      </form>
+    </div>
+    @if (grafico().legenda.length) {
+      <ul class="lista legenda" aria-label="Cartões">
+        @for (item of grafico().legenda; track item.nome) {
+          <li><span class="amostra" [style.backgroundColor]="item.cor" aria-hidden="true"></span>{{ item.nome }}</li>
+        }
+      </ul>
+      <ul class="lista barras">
+        @for (item of grafico().linhas; track item.mes) {
+          <li class="barra-parcelas">
+            <span>{{ item.mes | mesBr }}</span>
+            <div class="trilho" [attr.aria-label]="item.texto">
+              @for (parte of item.partes; track parte.nome) {
+                <div [style.width.%]="parte.largura" [style.backgroundColor]="parte.cor" [title]="parte.nome + ' · ' + (parte.valor | brl)"></div>
+              }
+            </div>
+            <strong class="moeda">{{ item.total | brl }}</strong>
+          </li>
+        }
+      </ul>
+      <details>
+        <summary>Ver valores por cartão</summary>
+        <ul class="lista">
+          @for (item of grafico().linhas; track item.mes) {
+            <li><strong>{{ item.mes | mesBr }}</strong>
+              @for (parte of item.partes; track parte.nome) { · {{ parte.nome }} {{ parte.valor | brl }} }
+              @empty { · {{ item.total | brl }} }
+            </li>
+          }
+        </ul>
+      </details>
+    } @else { <p class="suave">{{ ocupado() ? 'Carregando…' : 'Nenhuma parcela a pagar no período.' }}</p> }
+  </section>
+  <section class="painel">
+    <h2>Faturas</h2>
+    @if (selecionada(); as item) {
+      <form class="pagamento" [formGroup]="pagamento" (ngSubmit)="pagar(item)">
+        <h3>Pagar fatura de {{ item.cartao }} · {{ item.competencia | mesBr }}</h3>
+        <p>Saída de <strong>{{ item.total | brl }}</strong> da conta de pagamento. A despesa continua na competência das compras.</p>
+        <div class="flex flex-wrap items-end gap-2">
+          <label>Data do pagamento <input type="date" formControlName="data" required></label>
+          <button class="primario" [disabled]="ocupado() || pagamento.invalid">Confirmar pagamento</button>
+          <button type="button" class="secundario" (click)="selecionada.set(null)">Cancelar</button>
+        </div>
+      </form>
+    }
+    <div class="tabela">
+      <table class="responsivo">
+        <thead><tr><th scope="col">Cartão</th><th scope="col">Competência</th><th scope="col">Vencimento</th><th scope="col">Total</th><th scope="col">Estado</th><th scope="col">Ação</th></tr></thead>
+        <tbody>
+          @for (item of faturas(); track item.id) {
+            <tr><td><strong>{{ item.cartao }}</strong><small>Fecha em {{ item.dataFechamento | diaBr }}</small></td>
+              <td data-label="Competência">{{ item.competencia | mesBr }}</td><td data-label="Vencimento">{{ item.dataVencimento | diaBr }}</td>
+              <td data-label="Total" class="moeda">{{ item.total | brl }}</td><td><span class="etiqueta" [class.sucesso]="item.status === 'Paga'">{{ item.status }}</span></td>
+              <td>
+                @if (podePagar(item)) { <button type="button" class="secundario" [disabled]="ocupado()" (click)="selecionar(item)">Pagar fatura</button> }
+                @else if (item.status === 'Paga') { <a routerLink="/lancamentos">Ver extrato</a> }
+              </td>
+            </tr>
+          } @empty { <tr><td colspan="6" class="suave">Nenhuma fatura no período.</td></tr> }
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <section class="painel">
+    <h2>Compras parceladas</h2>
+    <div class="tabela">
+      <table class="responsivo">
+        <thead><tr><th scope="col">Compra</th><th scope="col">Cartão</th><th scope="col">Parcela no mês</th><th scope="col">Valor da parcela</th><th scope="col">Falta pagar</th><th scope="col">Termina em</th></tr></thead>
+        <tbody>
+          @for (item of compras(); track item.id) {
+            <tr>
+              <td><details><summary>{{ item.descricao }}</summary><ul class="lista">
+                @for (p of item.parcelas; track p.id) {
+                  <li>{{ p.numero }}/{{ item.totalParcelas }} · {{ p.fatura | mesBr }} · {{ p.valor | brl }} · {{ p.estornada ? 'Estornada' : p.paga ? 'Paga' : 'A pagar' }}</li>
+                }
+              </ul></details><small>{{ item.compra | diaBr }}</small></td>
+              <td data-label="Cartão">{{ item.cartao }}</td><td data-label="Parcela">{{ item.atual }}/{{ item.totalParcelas }}</td>
+              <td data-label="Valor" class="moeda">{{ item.valorParcela | brl }}</td>
+              <td data-label="Falta pagar" class="moeda">{{ item.faltaPagar | brl }}</td><td data-label="Termina em">{{ item.terminaEm | mesBr }}</td>
+            </tr>
+          } @empty { <tr><td colspan="6" class="suave">Nenhuma compra parcelada.</td></tr> }
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

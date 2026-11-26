@@ -1,0 +1,31 @@
+@reference "../../../styles.css";
+
+.compacto { margin-bottom: 10px; }
+.painel-filtros > form { @apply m-0; }
+.alertas { border-left: 4px solid #ca8a24; }
+.alertas li { @apply flex items-baseline; gap: 9px; font-size: .9rem; }
+.ponto { @apply rounded-full; width: 8px; height: 8px; flex: 0 0 8px; background: #a86a14; }
+.ponto.urgente { background: #a32142; }
+.saldos { @apply grid; grid-template-columns: 1.35fr repeat(3, 1fr); gap: 14px; }
+.saldo-principal, .indicador { @apply grid content-start min-w-0; padding: 18px; gap: 9px; }
+.saldo-principal { @apply text-white; background: radial-gradient(ellipse at top right, #245968, transparent 78%), var(--marinho); border-radius: 17px; box-shadow: var(--sombra-painel); }
+.saldo-principal span, .saldo-principal p { color: #e0eaff; }
+.saldo-principal strong, .indicador strong { @apply tabular-nums; font-size: clamp(1.16rem, 1.8vw, 1.9rem); letter-spacing: -.045em; overflow-wrap: anywhere; }
+.saldo-principal p { font-size: .77rem; line-height: 1.45; }
+.saldo-principal p b { @apply text-white block; }
+.indicador span, .saldo-principal span { font-size: .88rem; font-weight: 650; }
+.indicador { border-top: 3px solid #c6dfdb; }
+.percentuais { @apply grid gap-3; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+.percentuais div { @apply grid; gap: .25rem; padding-left: 10px; border-left: 1px solid var(--linha); }
+.percentuais span { @apply text-suave; font-size: .78rem; }
+.percentuais strong { font-size: 1.22rem; }
+.graficos { @apply grid gap-4 items-stretch; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+.composicao { @apply grid justify-items-center gap-3; margin-top: 14px; }
+.rosca { @apply aspect-square rounded-full relative; width: min(145px, 60vw); }
+.rosca::after { @apply absolute bg-white rounded-full; content: ""; inset: 26%; }
+.legenda { @apply w-full; font-size: .82rem; }
+.legenda li { @apply grid items-center; grid-template-columns: 10px 1fr auto; gap: 7px; }
+.amostra { width: 10px; height: 10px; border-radius: 3px; }
+@media (max-width: 1020px) { .saldos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 790px) { .graficos { grid-template-columns: 1fr; } .percentuais { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); } }
+@media (max-width: 430px) { .saldos { gap: 9px; } .saldo-principal, .indicador { @apply p-3; } }

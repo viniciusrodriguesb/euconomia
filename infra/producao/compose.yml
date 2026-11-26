@@ -1,0 +1,117 @@
+name: euconomia-producao
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-app: &app
+  image: ${EUCONOMIA_IMAGE:?Informe a imagem publicada pelo GitHub Actions}
+  environment: &app-environment
+    ASPNETCORE_ENVIRONMENT: Production
+    ASPNETCORE_HTTP_PORTS: "8080"
+    AllowedHosts: ${EUCONOMIA_DOMAIN:?Informe o domínio da aplicação}
+    ConnectionStrings__Financeiro: 'Host=postgres;Port=5432;Database=${POSTGRES_DB:-euconomia};Username=${EUCONOMIA_DB_USER:-euconomia};Password="${EUCONOMIA_DB_PASSWORD:?Defina a senha do usuário da aplicação}";Include Error Detail=false'
+    ProxyReverso__IpConfiavel: ${EUCONOMIA_PROXY_IP:-172.30.18.2}
+    Seguranca__DiretorioChaves: /app/chaves
+    TZ: America/Sao_Paulo
+  networks:
+    - banco
+  logging: *logging
+
+services:
+  postgres:
+    image: postgres:16.15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-euconomia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina a senha administrativa do PostgreSQL}
+      POSTGRES_INITDB_ARGS: --data-checksums
+      EUCONOMIA_DB_USER: ${EUCONOMIA_DB_USER:-euconomia}
+      EUCONOMIA_DB_PASSWORD: ${EUCONOMIA_DB_PASSWORD:?Defina a senha do usuário da aplicação}
+      TZ: America/Sao_Paulo
+    command: [postgres, -c, timezone=America/Sao_Paulo, -c, fsync=on, -c, synchronous_commit=on, -c, full_page_writes=on]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./inicializar-banco.sh:/docker-entrypoint-initdb.d/10-euconomia.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - banco
+    logging: *logging
+
+  migracoes:
+    <<: *app
+    entrypoint: [/app/efbundle]
+    healthcheck:
+      disable: true
+    profiles: [ferramentas]
+
+  validar-caddy:
+    image: caddy:2-alpine
+    environment:
+      EUCONOMIA_DOMAIN: ${EUCONOMIA_DOMAIN:?Informe o domínio da aplicação}
+      ACME_EMAIL: ${ACME_EMAIL:?Informe o e-mail para os certificados}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    network_mode: none
+    profiles: [ferramentas]
+
+  app:
+    <<: *app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - chaves:/app/chaves
+    networks:
+      banco:
+      proxy:
+        ipv4_address: ${EUCONOMIA_APP_IP:-172.30.18.3}
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      EUCONOMIA_DOMAIN: ${EUCONOMIA_DOMAIN:?Informe o domínio da aplicação}
+      ACME_EMAIL: ${ACME_EMAIL:?Informe o e-mail para os certificados}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - certificados:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      proxy:
+        ipv4_address: ${EUCONOMIA_PROXY_IP:-172.30.18.2}
+    logging: *logging
+
+networks:
+  banco:
+    internal: true
+  proxy:
+    ipam:
+      config:
+        - subnet: ${EUCONOMIA_PROXY_SUBNET:-172.30.18.0/24}
+
+volumes:
+  postgres_data:
+  chaves:
+  certificados:
+  caddy_config:

@@ -1,0 +1,33 @@
+<a class="pular" href="#conteudo">Ir para o conteúdo</a>
+<header class="barra">
+  <div class="barra-miolo">
+    <a routerLink="/" class="marca">
+      <img src="/imagens/euconomia-icone.png" alt="" width="36" height="36">
+      <span>Eu<span class="marca-complemento">conomia</span></span>
+    </a>
+    @if (sessao.email()) {
+      <nav class="menu-principal" aria-label="Menu principal">
+        @for (item of menu; track item.rota) {
+          <a [routerLink]="item.rota" routerLinkActive="ativo" [routerLinkActiveOptions]="{ exact: true }"
+            ariaCurrentWhenActive="page" [attr.aria-label]="item.nome">
+            <span class="menu-icone" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                stroke-linecap="round" stroke-linejoin="round" focusable="false"><path [attr.d]="item.icone" /></svg>
+            </span>
+            <span class="menu-desktop">{{ item.nome }}</span>
+            <span class="menu-mobile">{{ item.rotulo }}</span>
+          </a>
+        }
+      </nav>
+      <div class="flex items-center gap-2">
+        <a routerLink="/seguranca" class="sair no-underline" routerLinkActive="!bg-slate-100" ariaCurrentWhenActive="page">Segurança</a>
+        <button type="button" class="sair" (click)="sair()" [disabled]="ocupado()">Sair</button>
+      </div>
+    }
+  </div>
+</header>
+<main id="conteudo" tabindex="-1" [class.com-menu]="sessao.email()">
+  @if (erro()) { <p class="mensagem erro" role="alert">{{ erro() }}</p> }
+  <router-outlet />
+</main>
+<app-carregamento-api [class.com-menu]="sessao.email()" />

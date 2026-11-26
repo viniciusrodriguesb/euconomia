@@ -1,0 +1,18 @@
+<div class="paginacao" role="group" [attr.aria-label]="'Paginação de ' + rotulo()">
+  <label>Itens por página
+    <select #seletor [disabled]="ocupado()" (change)="selecionarTamanho(seletor)">
+      @for (opcao of tamanhos(); track opcao) { <option [value]="opcao" [selected]="opcao === tamanho()">{{ opcao }}</option> }
+    </select>
+  </label>
+  @if (pagina(); as atual) {
+    <span aria-live="polite">{{ atual.total }} {{ rotulo() }} · Página {{ atual.paginaAtual }} de {{ totalPaginas() }}</span>
+    @if (totalPaginas() > 1) {
+      <div class="flex flex-wrap items-end gap-2">
+        <button type="button" class="secundario" [disabled]="ocupado() || atual.paginaAtual <= 1"
+          (click)="paginaAlterada.emit(atual.paginaAtual - 1)">Anterior</button>
+        <button type="button" class="secundario" [disabled]="ocupado() || atual.paginaAtual >= totalPaginas()"
+          (click)="paginaAlterada.emit(atual.paginaAtual + 1)">Próxima</button>
+      </div>
+    }
+  }
+</div>

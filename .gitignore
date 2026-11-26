@@ -1,0 +1,14 @@
+**/.env
+**/.vs/
+**/*.user
+**/*.suo
+/src/Api/appsettings.Development.json
+**/backups/
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+/.dotnet-local/
+/.publicacao/
+**/playwright-report/
+**/test-results/
